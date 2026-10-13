@@ -44,8 +44,8 @@ canvas{display:block;height:100%;max-width:480px;width:100%;touch-action:none}
   <div class="big" id="ovScore">0</div>
   <p id="ovSub">第 1 关 · 最高连击 x1</p>
   <ol class="lb" id="lb"></ol>
-  <button class="btn ad" id="btnRevive">看视频 复活（清空暂存区）</button>
-  <div class="row"><button class="btn ghost" id="btnShare">晒成绩</button><button class="btn" id="btnRetry">再来一局</button></div>
+  <button class="btn ad" id="btnRevive">看视频 复活（清空暂存区+20秒）</button>
+  <div class="row"><button class="btn ghost" id="btnShare">晒成绩</button><button class="btn" id="btnRetry">重玩本关</button></div>
 </div></div>
 
 <div class="ov" id="clear"><div class="card">
@@ -79,6 +79,8 @@ const PALETTE=[
   {n:'丁香',c:'#B388EB',d:'#7F5CB8',l:'#DCC8F7'},
   {n:'樱粉',c:'#FF8FC7',d:'#D0619A',l:'#FFCDE6'},
   {n:'橘子',c:'#FF9F43',d:'#C9711F',l:'#FFD0A0'},
+  {n:'青柠',c:'#9BD13B',d:'#6E9A22',l:'#D3EEA0'},
+  {n:'靛蓝',c:'#5B6EE1',d:'#3A48A8',l:'#B9C2F5'},
 ];
 const BG='#FFF4E6', INK='#2B2140';
 
@@ -144,6 +146,10 @@ function layout(){
 
 /* ---------------- Sprites ---------------- */
 let sprites={};
+function hiddenSprite(){const key='h_'+Math.round(R*DPR);if(sprites[key])return sprites[key];
+  const s=Math.ceil(R*2.4*DPR),c=document.createElement('canvas');c.width=c.height=s;const g=c.getContext('2d');g.scale(DPR,DPR);const cx=R*1.2,cy=R*1.2;
+  const gr=g.createRadialGradient(cx-R*.35,cy-R*.4,R*.1,cx,cy,R);gr.addColorStop(0,'#9b90ad');gr.addColorStop(1,'#4a3f60');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R,0,7);g.fill();
+  g.fillStyle='rgba(255,255,255,.85)';g.font=`900 ${Math.round(R*1.1)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';g.fillText('?',cx,cy+1);sprites[key]=c;return c;}
 function yarnSprite(ci,blocked){
   const key=ci+(blocked?'b':'')+'_'+Math.round(R*DPR);
   if(sprites[key])return sprites[key];
@@ -167,11 +173,27 @@ let state=null;
 const rnd=(a,b)=>a+Math.random()*(b-a);
 function seededShuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
-function newRun(){
-  state={level:1,score:0,bestCombo:1,revived:false,trayCap:5};
+function newRun(lv){
+  lv=lv||+(localStorage.getItem('kp_lv')||1)||1;
+  state={level:lv,score:0,bestCombo:1,revived:false,trayCap:5};
   startLevel();
 }
-function levelSpec(lv){return{colors:Math.min(3+Math.floor((lv+1)/2),7),triples:Math.min(5+lv*2,26),layers:Math.min(2+Math.floor(lv/2),6)};}
+/* 难度曲线：1-3 教学 · 4 起隐藏球 · 7 起锁链球 · 10 起限时关 · 每 5 关一个“困难关”，困难关后一关喘息 */
+const MECH_INTRO={4:'新机制：❓隐藏毛球，露出来才知道颜色',7:'新机制：🔒锁链毛球，完成线轴才能解锁',10:'新机制：⏱ 限时关，开始拿球后倒计时'};
+function levelSpec(lv){
+  const t=Math.min(lv,45),boss=lv>=5&&lv%5===0,breather=lv>5&&lv%5===1;
+  let colors=Math.min(3+Math.floor((t+1)/3.5),8);
+  let triples=Math.min(6+Math.round(t*1.1),38);
+  let layers=Math.min(2+Math.floor(t/2.5),8);
+  if(boss){triples+=lv>=20?1:3;colors=Math.min(colors+1,9);}
+  if(breather){triples=Math.max(6,triples-4);}
+  const hidden=lv<4?0:Math.min(.15+(lv-4)*.03,.65);
+  const locked=lv<7?0:Math.min(2+Math.floor((lv-7)/3),8);
+  const timed=lv>=10&&(lv%3===1||boss);
+  const time=timed?Math.round(triples*3*(lv>=20?1.05:1.25)+8):0;
+  const bias=lv<2?0:Math.min(.5,.1+lv*.025+(boss?.12:0)); // 线轴颜色“不配合”的概率
+  return{colors,triples,layers,hidden,locked,time,bias,boss,tag:boss?(lv>=15?'超难':'困难'):''};
+}
 function startLevel(){
   const sp=levelSpec(state.level);
   const cols=[];const cset=seededShuffle([...Array(PALETTE.length).keys()]).slice(0,sp.colors);
@@ -185,7 +207,15 @@ function startLevel(){
   state.gridSeed=state.balls.map(()=>Math.random());
   state.tray=[];state.flying=[];state.combo=0;state.comboT=0;state.levelScore=0;state.cleared=false;state.dead=false;
   state.spools=[null,null,null];state.started=false;state.t0=performance.now();state.taps=0;
+  state.spec=sp;state.trayCap=5;state.revived=false;state.pendQ=[];state.pending=0;state.timeLimit=sp.time;state.timeLeft=sp.time;state.failReason='';state.levelStartScore=state.score;
+  state.balls.forEach(b=>{b.hidden=false;b.lock=0;});
+  { const cand=state.balls.filter(b=>b.layer<sp.layers-1);seededShuffle(cand);
+    const nh=Math.round(cand.length*sp.hidden);cand.slice(0,nh).forEach(b=>b.hidden=true);
+    const top=seededShuffle(state.balls.filter(b=>b.layer>=Math.floor(sp.layers/2)));
+    top.slice(0,sp.locked).forEach((b,i)=>{b.lock=2+(i%3)+(state.level>=18?1:0);}); }
   placePile();refreshBlocked();
+  if(MECH_INTRO[state.level])toast(MECH_INTRO[state.level]);else if(sp.boss)toast('⚠ '+sp.tag+'关！');
+  try{localStorage.setItem('kp_lv',state.level);}catch(e){}
   for(let i=0;i<3;i++)state.spools[i]=pickSpool(i);
   state.spools.forEach((s,i)=>{if(s)s.enter=i*0.12;});
   hint.t=0;hint.show=state.level===1;
@@ -208,7 +238,8 @@ function placePile(){
 }
 function refreshBlocked(){
   const alive=state.balls.filter(b=>b.alive&&!b.taken);
-  alive.forEach(a=>{a.blocked=alive.some(b=>b.layer>a.layer&&Math.hypot(a.tx-b.tx,a.ty-b.ty)<R*1.75);});
+  alive.forEach(a=>{a.blocked=alive.some(b=>b.layer>a.layer&&Math.hypot(a.tx-b.tx,a.ty-b.ty)<R*1.75);
+    if(!a.blocked&&a.hidden){a.hidden=false;a.scale=.4;if(state.started)burst(a.tx,a.ty,PALETTE[a.c].c,8,2);}});
 }
 function pickSpool(idx){
   const active=state.spools.filter(Boolean).map(s=>s.c);
@@ -220,7 +251,8 @@ function pickSpool(idx){
   if(!cands.length)return null;
   const score=c=>{let v=0;state.tray.forEach(b=>{if(b.c===c)v+=4;});state.balls.forEach(b=>{if(b.alive&&!b.taken&&b.c===c)v+=b.blocked?.2:1.2;});if(active.includes(c))v-=6;return v+Math.random()*.5;};
   cands.sort((a,b)=>score(b)-score(a));
-  if(state.level>=3&&cands.length>1&&Math.random()<Math.min(.5,.12*state.level))cands.shift();
+  const bias=state.spec?state.spec.bias:0;
+  if(cands.length>1&&Math.random()<bias){cands.shift();if(cands.length>1&&Math.random()<bias*.6)cands.push(cands.shift());}
   return{c:cands[0],n:0,landed:0,enter:0,pop:0,id:Math.random()};
 }
 function spoolPos(i){const w=W/3;return{x:w*i+w/2,y:L.spoolY+L.spoolH/2};}
@@ -238,6 +270,7 @@ cv.addEventListener('pointerdown',e=>{
   const hit=alive.find(b=>Math.hypot(x-b.x,y-b.y)<R*1.05);
   if(!hit)return;
   if(hit.blocked){hit.shake=.3;SFX.bad();shake(3);return;}
+  if(hit.lock>0){hit.shake=.4;SFX.bad();shake(3);toast('🔒 再完成 '+hit.lock+' 个线轴解锁');return;}
   take(hit);
 });
 function take(b){
@@ -311,6 +344,9 @@ function update(dt){
   shakeAmt*=Math.pow(.02,dt);flash=Math.max(0,flash-dt*3);
   if(toastMsg){toastMsg.t-=dt;if(toastMsg.t<=0)toastMsg=null;}
   hint.t+=dt;
+  for(let k=state.pendQ.length-1;k>=0;k--){const q=state.pendQ[k];q.t-=dt;if(q.t<=0){state.pendQ.splice(k,1);state.pending--;
+    state.spools[q.i]=pickSpool(q.i);if(state.spools[q.i]){state.spools[q.i].enter=.25;pullTray(q.i);}checkWin();}}
+  if(state.timeLimit&&state.started&&!state.dead&&!state.cleared){state.timeLeft-=dt;if(state.timeLeft<=0){state.timeLeft=0;toast('⏱ 时间到！');fail('time');}}
   checkStuck();
 }
 function land(b,f){
@@ -326,8 +362,11 @@ function land(b,f){
   }
 }
 function checkStuck(){
-  if(state.dead||state.cleared||state.flying.length||state.tray.length<state.trayCap||state.pending)return;
-  const free=state.balls.filter(b=>b.alive&&!b.taken&&!b.blocked);
+  if(state.dead||state.cleared||state.flying.length||state.pending)return;
+  const tappable=state.balls.filter(b=>b.alive&&!b.taken&&!b.blocked&&!(b.lock>0));
+  if(!tappable.length){const lk=state.balls.filter(b=>b.alive&&!b.taken&&!b.blocked&&b.lock>0).sort((a,b)=>a.lock-b.lock)[0];if(lk){lk.lock=0;lk.scale=.5;toast('🔓 锁链松开了');}}
+  if(state.tray.length<state.trayCap)return;
+  const free=tappable;
   if(!free.some(b=>state.spools.some(s=>s&&s.c===b.c&&s.n<3)))fail();
 }
 function completeSpool(i){
@@ -339,10 +378,8 @@ function completeSpool(i){
   if(state.combo>=2)floatText(p.x,p.y-50,PRAISE[Math.min(state.combo-1,PRAISE.length-1)]+' x'+state.combo,col.d,26+state.combo*2);
   if(navigator.vibrate)try{navigator.vibrate(state.combo>=3?[20,30,20]:15);}catch(e){}
   state.spools[i]=null;state.pending=(state.pending||0)+1;
-  setTimeout(()=>{state.pending--;
-    state.spools[i]=pickSpool(i);if(state.spools[i]){state.spools[i].enter=.25;pullTray(i);}
-    checkWin();
-  },220);
+  state.balls.forEach(b=>{if(b.alive&&!b.taken&&b.lock>0){b.lock--;if(!b.lock){b.scale=.5;burst(b.x,b.y,'#fff',12,4);}}});
+  state.pendQ.push({t:.22,i});
 }
 function pullTray(i){
   const s=state.spools[i];if(!s)return;
@@ -364,8 +401,8 @@ function checkWin(){
     },900);
   }
 }
-function fail(){
-  if(state.dead)return;state.dead=true;SFX.lose();shake(12);
+function fail(reason){
+  if(state.dead)return;state.dead=true;state.failReason=reason||'full';SFX.lose();shake(12);
   track('fail',state.level);
   setTimeout(()=>showOver(),700);
 }
@@ -377,7 +414,7 @@ function best(){const lb=lbGet();return lb.length?lb[0].s:0;}
 function showOver(){
   const id=state.savedId=lbSave(state.score,state.level);
   const lb=lbGet();const isBest=lb[0]&&lb[0].id===id;
-  document.getElementById('ovTitle').textContent=isBest?'新纪录！🎉':'线团卡住啦';
+  document.getElementById('ovTitle').textContent=state.failReason==='time'?'时间到啦 ⏱':(isBest?'新纪录！🎉':'线团卡住啦');
   document.getElementById('ovScore').textContent=state.score;
   document.getElementById('ovSub').textContent=`到达第 ${state.level} 关 · 最高连击 x${state.bestCombo}`;
   document.getElementById('lb').innerHTML=lb.slice(0,5).map((r,i)=>`<li class="${r.id===id?'me':''}"><span>${['🥇','🥈','🥉','4','5'][i]} 第${r.l}关 · ${r.d}</span><b>${r.s}</b></li>`).join('');
@@ -387,12 +424,12 @@ function showOver(){
 }
 function show(id){document.querySelectorAll('.ov').forEach(o=>o.id!=='adov'&&o.classList.remove('show'));if(id)document.getElementById(id).classList.add('show');}
 
-document.getElementById('btnRetry').onclick=()=>{SFX.click();show(null);newRun();};
+document.getElementById('btnRetry').onclick=()=>{SFX.click();show(null);state.score=state.levelStartScore||0;startLevel();};
 document.getElementById('btnNext').onclick=()=>{SFX.click();show(null);state.level++;startLevel();};
 document.getElementById('btnRevive').onclick=async()=>{SFX.click();const ok=await KnotPopAds.showRewarded('revive');if(!ok)return;
   // remove saved record (run continues)
   localStorage.setItem('kp_lb',JSON.stringify(lbGet().filter(r=>r.id!==state.savedId)));
-  state.revived=true;state.dead=false;const back=state.tray.splice(0);back.forEach(b=>{b.taken=false;b.layer=state.layersN+1;b.scale=.2;});state.layersN++;refreshBlocked();show(null);toast('复活！暂存区已清空');SFX.win();};
+  state.revived=true;state.dead=false;const back=state.tray.splice(0);back.forEach(b=>{b.taken=false;b.layer=state.layersN+1;b.scale=.2;});state.layersN++;if(state.timeLimit)state.timeLeft+=20;refreshBlocked();show(null);toast('复活！暂存区已清空'+(state.timeLimit?' +20秒':''));SFX.win();};
 document.getElementById('btnDouble').onclick=async()=>{SFX.click();const ok=await KnotPopAds.showRewarded('double');if(!ok)return;
   const add=state.levelScore+state.lastBonus;state.score+=add;document.getElementById('clScore').textContent='+'+(add*2);document.getElementById('btnDouble').style.display='none';confetti();SFX.win();};
 document.getElementById('btnShare').onclick=()=>{SFX.click();shareCard();};
@@ -432,11 +469,14 @@ function draw(){
   ctx.fillStyle='#fff';ctx.font=`900 ${Math.round(R*1.1)}px sans-serif`;ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText(state.score,16,L.hud+16);
   ctx.font=`600 ${Math.round(R*.55)}px sans-serif`;ctx.fillStyle='#BFB3D6';ctx.fillText('最高 '+Math.max(best(),state.score),16,L.hud+42);
-  ctx.textAlign='center';ctx.fillStyle=PALETTE[1].c;ctx.font=`900 ${Math.round(R*.75)}px sans-serif`;ctx.fillText('第 '+state.level+' 关',W/2,L.hud+18);
+  ctx.textAlign='center';ctx.fillStyle=PALETTE[1].c;ctx.font=`900 ${Math.round(R*.75)}px sans-serif`;ctx.fillText('第 '+state.level+' 关'+(state.spec&&state.spec.tag?' · '+state.spec.tag:''),W/2,L.hud+18);
   const leftN=state.balls.filter(b=>b.alive&&!b.taken).length;ctx.fillStyle='#BFB3D6';ctx.font=`600 ${Math.round(R*.5)}px sans-serif`;ctx.fillText('剩余 '+leftN+' 个毛球',W/2,L.hud+42);
   ctx.textAlign='right';ctx.font=`${Math.round(R*.9)}px sans-serif`;ctx.fillStyle='#fff';ctx.fillText(muted?'🔇':'🔊',W-14,L.hud+20);
   if(state.combo>=2&&state.comboT>0){ctx.textAlign='right';ctx.fillStyle=PALETTE[5].c;ctx.font=`900 ${Math.round(R*.7)}px sans-serif`;ctx.fillText('连击 x'+state.combo,W-14,L.hud+48);
     ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(W-90,L.hud+60,76,4);ctx.fillStyle=PALETTE[5].c;ctx.fillRect(W-90,L.hud+60,76*Math.max(0,state.comboT/2.6),4);}
+  if(state.timeLimit){const fr=Math.max(0,state.timeLeft/state.timeLimit),bw=W*.42,bx=W/2-bw/2,by=L.hud+56;ctx.fillStyle='rgba(255,255,255,.15)';roundRect(ctx,bx,by,bw,8,4);ctx.fill();
+    ctx.fillStyle=fr<.25?`rgba(255,107,107,${.6+.4*Math.sin(performance.now()/90)})`:'#3DDC97';roundRect(ctx,bx,by,Math.max(8,bw*fr),8,4);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`800 ${Math.round(R*.5)}px sans-serif`;ctx.textAlign='left';ctx.fillText('⏱'+Math.ceil(state.timeLeft)+'s',bx+bw+6,by+5);}
   // spools
   state.spools.forEach((s,i)=>drawSpool(i,s));
   // tray
@@ -446,7 +486,9 @@ function draw(){
   // pile (by layer)
   const pile=state.balls.filter(b=>b.alive&&!b.taken).sort((a,b)=>a.layer-b.layer);
   const t=performance.now()/1000;
-  pile.forEach(b=>{const sh=b.shake?Math.sin(b.shake*60)*4:0;const bob=b.blocked?0:Math.sin(t*2+b.wob)*1.2;drawBall(b.c,b.x+sh,b.y+bob,b.scale*(b.blocked?.94:1),b.blocked,0);});
+  pile.forEach(b=>{const sh=b.shake?Math.sin(b.shake*60)*4:0;const bob=b.blocked?0:Math.sin(t*2+b.wob)*1.2;drawBall(b.c,b.x+sh,b.y+bob,b.scale*(b.blocked?.94:1),b.blocked,0,b.hidden);
+    if(b.lock>0){const x=b.x+sh,y=b.y+bob;ctx.strokeStyle='rgba(60,48,88,.85)';ctx.lineWidth=R*.18;ctx.beginPath();ctx.moveTo(x-R*.9,y-R*.5);ctx.lineTo(x+R*.9,y+R*.5);ctx.moveTo(x-R*.9,y+R*.5);ctx.lineTo(x+R*.9,y-R*.5);ctx.stroke();
+      ctx.fillStyle='#2B2140';ctx.beginPath();ctx.arc(x,y,R*.42,0,7);ctx.fill();ctx.fillStyle='#FFC145';ctx.font=`900 ${Math.round(R*.55)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.lock,x,y+1);}});
   state.tray.forEach(b=>{if(!b.fly)drawBall(b.c,b.x,b.y,.9,false,0);});
   state.flying.forEach(b=>drawBall(b.c,b.x,b.y,1.05,false,b.rot));
   // particles
@@ -470,7 +512,7 @@ function draw(){
   ctx.restore();
   if(flash>0){ctx.fillStyle=`rgba(255,255,255,${flash})`;ctx.fillRect(0,0,W,H);}
 }
-function drawBall(ci,x,y,s,blocked,rot){const sp=yarnSprite(ci,blocked),sz=R*2.4*s;ctx.save();ctx.translate(x,y);if(rot)ctx.rotate(rot);ctx.drawImage(sp,-sz/2,-sz/2,sz,sz);ctx.restore();}
+function drawBall(ci,x,y,s,blocked,rot,hid){const sp=hid?hiddenSprite():yarnSprite(ci,blocked),sz=R*2.4*s;ctx.save();ctx.translate(x,y);if(rot)ctx.rotate(rot);ctx.drawImage(sp,-sz/2,-sz/2,sz,sz);ctx.restore();}
 function drawSpool(i,s){
   const p=spoolPos(i),w=Math.min(W/3-22,96),h=L.spoolH;
   ctx.save();ctx.translate(p.x,p.y);
@@ -499,11 +541,14 @@ resize();newRun();requestAnimationFrame(loop);
 /* test / demo hooks */
 window.__game={get state(){return state},
   autoStep(){ if(!state||state.dead||state.cleared)return false;
-    const free=state.balls.filter(b=>b.alive&&!b.taken&&!b.blocked);if(!free.length)return false;
+    const free=state.balls.filter(b=>b.alive&&!b.taken&&!b.blocked&&!(b.lock>0));if(!free.length)return false;
     let pick=free.find(b=>state.spools.some(s=>s&&s.c===b.c&&s.n<3));
     if(!pick){const cnt={};state.tray.forEach(b=>cnt[b.c]=(cnt[b.c]||0)+1);pick=free.sort((a,b)=>(cnt[b.c]||0)-(cnt[a.c]||0))[0];}
     take(pick);return{x:pick.fx||pick.x,y:pick.y};},
-  next(){show(null);state.level++;startLevel();}};
+  next(){show(null);state.level++;startLevel();},
+  setLevel(n){show(null);state.level=n;state.score=0;startLevel();},
+  tick(sec){const n=Math.round(sec*60);for(let i=0;i<n;i++)update(1/60);},
+  spec:levelSpec,_take(b){take(b);return true;}};
 })();
 </script>
 </body>
