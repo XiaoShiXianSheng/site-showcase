@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安居匠心·家装维修</title><style>
+:root{--c1:#1f4e79;--c2:#f28c28;--bg:#f4f7fb}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;background:var(--bg);color:#2b2b2b;line-height:1.7}
+a{color:inherit;text-decoration:none}.wrap{max-width:1100px;margin:auto;padding:0 20px}
+nav{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);z-index:9;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:62px}.logo{font-weight:800;color:var(--c1);font-size:18px}
+nav ul{display:flex;gap:22px;list-style:none;font-size:15px}
+.btn{display:inline-block;background:var(--c1);color:#fff;padding:12px 26px;border-radius:999px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.15)}.btn.alt{background:#fff;color:var(--c1)}
+.hero{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;padding:90px 0 110px;position:relative;overflow:hidden}
+.hero:after{content:"🛠️";position:absolute;right:6%;top:50%;transform:translateY(-50%);font-size:220px;opacity:.25}
+.hero small{background:rgba(255,255,255,.25);padding:4px 12px;border-radius:99px;font-size:13px}
+.hero h1{font-size:46px;margin:18px 0 10px;line-height:1.25}.hero p{font-size:19px;opacity:.95;margin-bottom:30px}
+section{padding:70px 0}h2{text-align:center;font-size:30px;margin-bottom:8px;color:var(--c1)}.lead{text-align:center;color:#777;margin-bottom:40px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.card{background:#fff;border-radius:18px;padding:26px;box-shadow:0 8px 24px rgba(0,0,0,.06);transition:.2s}.card:hover{transform:translateY(-4px)}
+.card .ic{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--c2),var(--c1));display:grid;place-items:center;font-size:28px;margin-bottom:12px}
+.card p{color:#777;font-size:14px;margin:4px 0 12px}.card b{color:var(--c1);font-size:22px}
+.feat{background:#fff}.feats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;text-align:center}.feats div{padding:18px}.feats strong{display:block;font-size:30px;color:var(--c1)}
+.rev{background:#fff;border-radius:18px;padding:24px;border-top:4px solid var(--c2)}.stars{color:#f5a623}.rev span{color:#999;font-size:14px}
+.contact{background:linear-gradient(135deg,#fff,var(--bg))}.cbox{display:grid;grid-template-columns:1.4fr 1fr;gap:30px;align-items:center;background:#fff;border-radius:22px;padding:34px;box-shadow:0 10px 30px rgba(0,0,0,.07)}
+.cbox li{list-style:none;margin:10px 0}.qr{text-align:center}.qr .q{width:170px;height:170px;margin:auto;border-radius:12px;border:8px solid #fff;outline:2px solid var(--c1);
+background:repeating-conic-gradient(#222 0 25%,#fff 0 50%) 0 0/20px 20px}.qr p{font-size:13px;color:#888;margin-top:8px}
+.map{height:160px;border-radius:14px;margin-top:16px;background:linear-gradient(45deg,#e8eef3 25%,transparent 25%,transparent 75%,#e8eef3 75%),linear-gradient(45deg,#e8eef3 25%,#f7f9fb 25%,#f7f9fb 75%,#e8eef3 75%);background-size:40px 40px;background-position:0 0,20px 20px;display:grid;place-items:center;color:var(--c1);font-weight:700}
+.cta{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;text-align:center}.cta h2{color:#fff}
+footer{text-align:center;padding:24px;font-size:13px;color:#999}
+.float{position:fixed;right:18px;bottom:18px;z-index:9}
+@media(max-width:760px){nav ul{display:none}.hero{padding:60px 0 70px}.hero h1{font-size:32px}.hero:after{font-size:120px;right:-10px;top:auto;bottom:-20px;transform:none}
+.grid,.feats{grid-template-columns:1fr 1fr}.cbox{grid-template-columns:1fr}section{padding:50px 0}}
+@media(max-width:420px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<nav><div class="wrap"><div class="logo">🛠️ 安居匠心·家装维修</div><ul><li><a href="#menu">服务/价目</a></li><li><a href="#reviews">顾客评价</a></li><li><a href="#contact">联系我们</a></li></ul></div></nav>
+<header class="hero"><div class="wrap"><small>示例虚构公司 · 作品集样例</small><h1>老房翻新 · 局部改造 · 上门维修</h1><p>免费上门量房 · 报价透明无增项 · 水电质保 2 年</p><a class="btn alt" href="#contact">预约免费量房</a></div></header>
+<section class="feat"><div class="wrap feats"><div><strong>5年</strong>用心经营</div><div><strong>3000+</strong>回头客</div><div><strong>4.9★</strong>平台评分</div><div><strong>100%</strong>明码标价</div></div></section>
+<section id="menu"><div class="wrap"><h2>服务 & 价目</h2><p class="lead">价格透明，到店/上门前即可知道花多少钱</p><div class="grid"><div class="card"><div class="ic">🚿</div><h3>卫生间翻新</h3><p>防水 + 瓷砖 + 洁具安装</p><b>¥ 9800 起</b></div><div class="card"><div class="ic">🍳</div><h3>厨房改造</h3><p>橱柜 + 水电 + 墙地砖</p><b>¥ 12800 起</b></div><div class="card"><div class="ic">🎨</div><h3>墙面刷新</h3><p>铲墙 + 腻子 + 环保乳胶漆</p><b>¥ 28/㎡ 起</b></div><div class="card"><div class="ic">💡</div><h3>水电改造</h3><p>国标线管 · 打压测试</p><b>¥ 85/米 起</b></div><div class="card"><div class="ic">🔧</div><h3>上门维修</h3><p>漏水 / 开关 / 门锁</p><b>¥ 80 起</b></div><div class="card"><div class="ic">🏠</div><h3>全屋整装</h3><p>设计 + 施工 + 主材</p><b>¥ 698/㎡ 起</b></div></div></div></section>
+<section id="reviews" style="background:#fff"><div class="wrap"><h2>顾客怎么说</h2><p class="lead">真实感受（示例文案）</p><div class="grid"><div class="rev"><div class="stars">★★★★★</div><p>“卫生间 6 天完工，报价和最后结算一分没多。”</p><span>— 刘先生</span></div><div class="rev"><div class="stars">★★★★★</div><p>“师傅准时上门，干完活还把地拖干净了。”</p><span>— 赵阿姨</span></div><div class="rev"><div class="stars">★★★★★</div><p>“水电走线拍照留档，后期维修很方便。”</p><span>— Mike</span></div></div></div></section>
+<section id="contact" class="contact"><div class="wrap"><h2>到店 / 联系</h2><p class="lead">扫码添加微信，回复更快</p><div class="cbox"><div><ul><li>📍 服务范围：示例市主城区（门店：示例区建设路 66 号）</li><li>🕒 每天 8:00 – 20:00</li><li>📞 400-000-0003</li></ul><div class="map">🗺️ 地图位置（可嵌入高德/百度地图）</div></div>
+<div class="qr"><div class="q"></div><p>微信二维码占位</p></div></div></div></section>
+<section class="cta"><div class="wrap"><h2>预约免费量房</h2><p style="margin:10px 0 24px">新客首次消费享 9 折（示例活动）</p><a class="btn alt" href="#contact">立即联系</a></div></section>
+<footer>© 2026 安居匠心·家装维修（虚构品牌，仅作网页设计样例）</footer>
+<a class="btn float" href="#contact">💬 预约免费量房</a></body></html>

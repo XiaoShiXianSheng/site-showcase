@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>青柚时光·茶饮咖啡</title><style>
+:root{--c1:#2f7d5b;--c2:#f6c453;--bg:#fbf7ef}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;background:var(--bg);color:#2b2b2b;line-height:1.7}
+a{color:inherit;text-decoration:none}.wrap{max-width:1100px;margin:auto;padding:0 20px}
+nav{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);z-index:9;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:62px}.logo{font-weight:800;color:var(--c1);font-size:18px}
+nav ul{display:flex;gap:22px;list-style:none;font-size:15px}
+.btn{display:inline-block;background:var(--c1);color:#fff;padding:12px 26px;border-radius:999px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.15)}.btn.alt{background:#fff;color:var(--c1)}
+.hero{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;padding:90px 0 110px;position:relative;overflow:hidden}
+.hero:after{content:"🧋";position:absolute;right:6%;top:50%;transform:translateY(-50%);font-size:220px;opacity:.25}
+.hero small{background:rgba(255,255,255,.25);padding:4px 12px;border-radius:99px;font-size:13px}
+.hero h1{font-size:46px;margin:18px 0 10px;line-height:1.25}.hero p{font-size:19px;opacity:.95;margin-bottom:30px}
+section{padding:70px 0}h2{text-align:center;font-size:30px;margin-bottom:8px;color:var(--c1)}.lead{text-align:center;color:#777;margin-bottom:40px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.card{background:#fff;border-radius:18px;padding:26px;box-shadow:0 8px 24px rgba(0,0,0,.06);transition:.2s}.card:hover{transform:translateY(-4px)}
+.card .ic{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--c2),var(--c1));display:grid;place-items:center;font-size:28px;margin-bottom:12px}
+.card p{color:#777;font-size:14px;margin:4px 0 12px}.card b{color:var(--c1);font-size:22px}
+.feat{background:#fff}.feats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;text-align:center}.feats div{padding:18px}.feats strong{display:block;font-size:30px;color:var(--c1)}
+.rev{background:#fff;border-radius:18px;padding:24px;border-top:4px solid var(--c2)}.stars{color:#f5a623}.rev span{color:#999;font-size:14px}
+.contact{background:linear-gradient(135deg,#fff,var(--bg))}.cbox{display:grid;grid-template-columns:1.4fr 1fr;gap:30px;align-items:center;background:#fff;border-radius:22px;padding:34px;box-shadow:0 10px 30px rgba(0,0,0,.07)}
+.cbox li{list-style:none;margin:10px 0}.qr{text-align:center}.qr .q{width:170px;height:170px;margin:auto;border-radius:12px;border:8px solid #fff;outline:2px solid var(--c1);
+background:repeating-conic-gradient(#222 0 25%,#fff 0 50%) 0 0/20px 20px}.qr p{font-size:13px;color:#888;margin-top:8px}
+.map{height:160px;border-radius:14px;margin-top:16px;background:linear-gradient(45deg,#e8eef3 25%,transparent 25%,transparent 75%,#e8eef3 75%),linear-gradient(45deg,#e8eef3 25%,#f7f9fb 25%,#f7f9fb 75%,#e8eef3 75%);background-size:40px 40px;background-position:0 0,20px 20px;display:grid;place-items:center;color:var(--c1);font-weight:700}
+.cta{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;text-align:center}.cta h2{color:#fff}
+footer{text-align:center;padding:24px;font-size:13px;color:#999}
+.float{position:fixed;right:18px;bottom:18px;z-index:9}
+@media(max-width:760px){nav ul{display:none}.hero{padding:60px 0 70px}.hero h1{font-size:32px}.hero:after{font-size:120px;right:-10px;top:auto;bottom:-20px;transform:none}
+.grid,.feats{grid-template-columns:1fr 1fr}.cbox{grid-template-columns:1fr}section{padding:50px 0}}
+@media(max-width:420px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<nav><div class="wrap"><div class="logo">🧋 青柚时光·茶饮咖啡</div><ul><li><a href="#menu">服务/价目</a></li><li><a href="#reviews">顾客评价</a></li><li><a href="#contact">联系我们</a></li></ul></div></nav>
+<header class="hero"><div class="wrap"><small>示例虚构店铺 · 作品集样例</small><h1>一杯好茶，慢下来的午后</h1><p>鲜果现切 · 每日现煮茶底 · 社区里的第三空间</p><a class="btn alt" href="#contact">微信下单 / 到店自提</a></div></header>
+<section class="feat"><div class="wrap feats"><div><strong>5年</strong>用心经营</div><div><strong>3000+</strong>回头客</div><div><strong>4.9★</strong>平台评分</div><div><strong>100%</strong>明码标价</div></div></section>
+<section id="menu"><div class="wrap"><h2>服务 & 价目</h2><p class="lead">价格透明，到店/上门前即可知道花多少钱</p><div class="grid"><div class="card"><div class="ic">🍊</div><h3>招牌青柚冰茶</h3><p>手剥西柚 + 茉莉绿茶</p><b>¥16</b></div><div class="card"><div class="ic">🥭</div><h3>杨枝甘露</h3><p>新鲜芒果 + 西柚粒 + 椰浆</p><b>¥19</b></div><div class="card"><div class="ic">🧋</div><h3>黑糖珍珠鲜奶</h3><p>手炒黑糖，现熬珍珠</p><b>¥15</b></div><div class="card"><div class="ic">☕</div><h3>生椰拿铁</h3><p>云南豆 + 生椰乳</p><b>¥18</b></div><div class="card"><div class="ic">🍓</div><h3>草莓芝士奶盖</h3><p>季节限定</p><b>¥22</b></div><div class="card"><div class="ic">🍰</div><h3>每日小蛋糕</h3><p>巴斯克 / 提拉米苏</p><b>¥20</b></div></div></div></section>
+<section id="reviews" style="background:#fff"><div class="wrap"><h2>顾客怎么说</h2><p class="lead">真实感受（示例文案）</p><div class="grid"><div class="rev"><div class="stars">★★★★★</div><p>“西柚冰茶太解渴了，每周都来两三次！”</p><span>— 小林</span></div><div class="rev"><div class="stars">★★★★★</div><p>“环境干净安静，适合带电脑坐一下午。”</p><span>— 王女士</span></div><div class="rev"><div class="stars">★★★★★</div><p>“生椰拿铁比连锁店好喝，价格还更实在。”</p><span>— 阿杰</span></div></div></div></section>
+<section id="contact" class="contact"><div class="wrap"><h2>到店 / 联系</h2><p class="lead">扫码添加微信，回复更快</p><div class="cbox"><div><ul><li>📍 示例市示例区幸福路 88 号（地铁 2 号线 B 口步行 3 分钟）</li><li>🕒 每天 10:00 – 22:00</li><li>📞 138-0000-0001</li></ul><div class="map">🗺️ 地图位置（可嵌入高德/百度地图）</div></div>
+<div class="qr"><div class="q"></div><p>微信二维码占位</p></div></div></div></section>
+<section class="cta"><div class="wrap"><h2>微信下单 / 到店自提</h2><p style="margin:10px 0 24px">新客首次消费享 9 折（示例活动）</p><a class="btn alt" href="#contact">立即联系</a></div></section>
+<footer>© 2026 青柚时光·茶饮咖啡（虚构品牌，仅作网页设计样例）</footer>
+<a class="btn float" href="#contact">💬 微信下单 / 到店自提</a></body></html>
