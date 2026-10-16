@@ -75,11 +75,12 @@ test('DTC add-to-cart clearly states no real checkout', async ({ page }) => {
 });
 
 test('static HTML has no obvious embedded credentials or external script tags', async () => {
-  const files = routes.map(route => path.join(process.cwd(), route.path === '/' ? 'index.html' : route.path.replace(/^\//, '').replace(/\/$/, ''), 'index.html'));
+  const files = routes.map(route => route.path === '/'
+    ? path.join(process.cwd(), 'index.html')
+    : path.join(process.cwd(), route.path.replace(/^\//, '').replace(/\/$/, ''), 'index.html'));
   for (const file of files) {
-    const normalized = file.endsWith('/index.html') ? file : path.join(file, 'index.html');
-    if (!fs.existsSync(normalized)) continue;
-    const html = fs.readFileSync(normalized, 'utf8');
+    if (!fs.existsSync(file)) continue;
+    const html = fs.readFileSync(file, 'utf8');
     expect(html).not.toMatch(/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/i);
     expect(html).not.toMatch(/\bAKIA[0-9A-Z]{16}\b/);
     expect(html).not.toMatch(/sk-[A-Za-z0-9]{20,}/);
