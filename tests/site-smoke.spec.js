@@ -12,6 +12,16 @@ const routes = [
   { slug: 'cn-local', path: '/cn-local/', title: /本地实体店样站/, text: /本地实体店样站/ }
 ];
 
+async function revealScrollContent(page) {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < height; y += 600) {
+    await page.evaluate(scrollY => window.scrollTo(0, scrollY), y);
+    await page.waitForTimeout(80);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(120);
+}
+
 test.beforeEach(() => {
   fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
 });
@@ -38,6 +48,7 @@ for (const route of routes) {
       nodes.map(node => node.src).filter(src => new URL(src).origin !== location.origin)
     );
     expect(externalScripts, 'external script sources should be reviewed explicitly').toEqual([]);
+    await revealScrollContent(page);
     await page.screenshot({ path: path.join(process.cwd(), 'artifacts', `${route.slug}-desktop.png`), fullPage: true });
     expect(pageErrors, 'uncaught browser errors').toEqual([]);
   });
@@ -50,6 +61,7 @@ for (const route of routes) {
       viewport: window.innerWidth
     }));
     expect(dimensions.width, `horizontal overflow at ${route.path}`).toBeLessThanOrEqual(dimensions.viewport + 1);
+    await revealScrollContent(page);
     await page.screenshot({ path: path.join(process.cwd(), 'artifacts', `${route.slug}-mobile.png`), fullPage: true });
   });
 }
