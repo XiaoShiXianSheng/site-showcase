@@ -1,0 +1,12 @@
+{
+  "name": "site-showcase-smoke-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Read-only Playwright smoke tests for static showcase pages",
+  "scripts": {
+    "test:site": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}
