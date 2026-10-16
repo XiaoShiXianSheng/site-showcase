@@ -8,7 +8,7 @@ const routes = [
   { slug: 'factory', path: '/factory/', title: /Norvane Cookware/, text: /Cookware built for/ },
   { slug: 'dtc', path: '/dtc/', title: /KUMO Flask/, text: /Ice-cold for 24 hours/ },
   { slug: 'restaurant', path: '/restaurant/', title: /Casa Ember/, text: /Fire\. Masa\.Familia\./ },
-  { slug: 'knot-pop', path: '/games/knot-pop/', title: /Knot Pop/, text: /Knot Pop|解结乐/ },
+  { slug: 'knot-pop', path: '/games/knot-pop/', title: /Knot Pop/, text: null },
   { slug: 'cn-local', path: '/cn-local/', title: /本地实体店样站/, text: /本地实体店样站/ }
 ];
 
@@ -23,7 +23,12 @@ for (const route of routes) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(new URL(route.path, baseURL).toString(), { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveTitle(route.title);
-    await expect(page.locator('body')).toContainText(route.text);
+    if (route.text) {
+      await expect(page.locator('body')).toContainText(route.text);
+    }
+    if (route.slug === 'knot-pop') {
+      await expect(page.locator('canvas')).toHaveCount(1);
+    }
     const dimensions = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       viewport: window.innerWidth
