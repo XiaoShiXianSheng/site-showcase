@@ -128,8 +128,14 @@ function audio(){
       bgmBus=bgmDuck;
       bgmPad=[];bgmStarted=false;bgmNext=0;
     }
-    if(AC.state==='suspended')AC.resume();
-    startBgm();
+    if(AC.state==='suspended'){
+      const p=AC.resume();
+      /* If resume is async, ensure BGM restarts once context is running (bgmStarted may have been cleared on hide). */
+      if(p&&typeof p.then==='function'){
+        p.then(()=>{ try{ applyMuteGain(); if(!muted) startBgm(); }catch(e){} }).catch(()=>{});
+      }
+    }
+    if(!muted) startBgm();
   }catch(e){}
 }
 function applyMuteGain(){
@@ -322,6 +328,42 @@ function stopBgmHard(){
     bgmPad=[];bgmStarted=false;bgmNext=0;
   }catch(e){}
 }
+/* Pause cleanly on background: drop scheduler + continuous pads so resume can recreate.
+   Leaving bgmStarted=true with dead oscillators / cleared timers is what killed BGM after tab return. */
+function pauseBgmForBackground(){
+  try{
+    clearTimeout(bgmTimer);bgmTimer=null;
+    bgmPad.forEach(n=>{try{n.o.stop();}catch(e){}});
+    bgmPad=[];
+    bgmStarted=false;
+    bgmNext=0;
+    if(AC&&AC.state==='running')AC.suspend();
+  }catch(e){}
+}
+/* Resume path: await AudioContext.resume(), then force-restart pad voices + scheduler.
+   Called from visibilitychange / pageshow / focus when document becomes visible. */
+let bgmResumeSeq=0;
+async function resumeBgmFromForeground(){
+  const seq=++bgmResumeSeq;
+  try{
+    if(!AC||AC.state==='closed')return; /* never started — wait for a user gesture via audio() */
+    if(AC.state==='suspended'){
+      try{await AC.resume();}catch(e){}
+    }
+    if(seq!==bgmResumeSeq)return; /* newer resume won the race (focus+visibility) */
+    applyMuteGain();
+    if(muted)return; /* mute still silences; pads stay stopped until unmute + audio() */
+    /* Force-restart: recreate continuous pad/hush and kick scheduler even if prior state looked "started" */
+    stopBgmHard();
+    startBgm();
+  }catch(e){}
+}
+function onPageBecomeVisible(){
+  resumeBgmFromForeground();
+}
+function onPageBecomeHidden(){
+  pauseBgmForBackground();
+}
 function tone(f,dur,type='sine',vol=.3,slide=0,delay=0){
   try{
     if(!AC||muted)return;
@@ -354,13 +396,15 @@ const SFX={
 };
 document.addEventListener('visibilitychange',()=>{
   try{
-    if(document.hidden){
-      if(AC&&AC.state==='running')AC.suspend();
-    }else{
-      audio();
-      if(bgmStarted)scheduleBgm();
-    }
+    if(document.hidden) onPageBecomeHidden();
+    else onPageBecomeVisible();
   }catch(e){}
+});
+window.addEventListener('pageshow',()=>{
+  try{ if(!document.hidden) onPageBecomeVisible(); }catch(e){}
+});
+window.addEventListener('focus',()=>{
+  try{ if(!document.hidden) onPageBecomeVisible(); }catch(e){}
 });
 
 /* ---------------- Canvas setup ---------------- */
