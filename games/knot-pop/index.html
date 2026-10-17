@@ -104,15 +104,115 @@ window.KnotPopAds={
 };
 function track(ev,data){ (window.__events=window.__events||[]).push([ev,data||null,Date.now()]); }
 
-/* ---------------- Audio (WebAudio synth) ---------------- */
-let AC=null,master=null,muted=localStorage.getItem('kp_mute')==='1';
+/* ---------------- Audio (WebAudio synth + looping BGM) ---------------- */
+let AC=null,master=null,bgmGain=null,bgmPad=[],bgmTimer=null,bgmNext=0,bgmStarted=false;
+let muted=localStorage.getItem('kp_mute')==='1';
+const BGM_VOL=.15; /* quieter than SFX master ~0.5 */
 function audio(){
   try{
     if(!AC||AC.state==='closed'){
       AC=new (window.AudioContext||window.webkitAudioContext)();
       master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);
+      bgmGain=AC.createGain();bgmGain.gain.value=muted?0:BGM_VOL;bgmGain.connect(AC.destination);
+      bgmPad=[];bgmStarted=false;bgmNext=0;
     }
     if(AC.state==='suspended')AC.resume();
+    startBgm();
+  }catch(e){}
+}
+function applyMuteGain(){
+  try{
+    if(!AC||!bgmGain)return;
+    const t=AC.currentTime;
+    bgmGain.gain.cancelScheduledValues(t);
+    bgmGain.gain.setTargetAtTime(muted?0:BGM_VOL,t,.04);
+  }catch(e){}
+}
+function setMuted(v){
+  muted=!!v;
+  try{localStorage.setItem('kp_mute',muted?'1':'0');}catch(e){}
+  applyMuteGain();
+}
+/* Soft looping pad + 4-bar lo-fi melody (no external files) */
+function startBgm(){
+  try{
+    if(!AC||!bgmGain||bgmStarted)return;
+    bgmStarted=true;
+    /* continuous gentle pad (3 detuned sines through lowpass) */
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=720;lp.Q.value=.7;
+    lp.connect(bgmGain);
+    const roots=[196.00,246.94,293.66]; /* G3 B3 D4 soft triad */
+    bgmPad=[];
+    roots.forEach((f,i)=>{
+      const o=AC.createOscillator(),g=AC.createGain();
+      o.type='sine';o.frequency.value=f*(1+(i-1)*.003);
+      g.gain.value=.18;
+      o.connect(g);g.connect(lp);o.start();
+      const lfo=AC.createOscillator(),lg=AC.createGain();
+      lfo.frequency.value=.07+i*.01;lg.gain.value=.045;
+      lfo.connect(lg);lg.connect(g.gain);lfo.start();
+      bgmPad.push({o,g},{o:lfo,g:lg});
+    });
+    bgmNext=AC.currentTime+.05;
+    scheduleBgm();
+  }catch(e){bgmStarted=false;}
+}
+function scheduleBgm(){
+  try{
+    if(!AC||!bgmStarted)return;
+    const BPM=72,beat=60/BPM,bar=beat*4,loop=bar*4;
+    /* 4 bars: Cmaj7 Am7 Fmaj7 G7 — soft triangle plucks */
+    const chords=[
+      [261.63,329.63,392.00,493.88],
+      [220.00,261.63,329.63,415.30],
+      [174.61,220.00,261.63,349.23],
+      [196.00,246.94,293.66,392.00]
+    ];
+    const melody=[
+      [0,523.25,.35],[1,587.33,.28],[2,659.25,.4],[3,587.33,.28],
+      [4,523.25,.35],[5,440.00,.4],[6,493.88,.35],[7,523.25,.5],
+      [8,349.23,.35],[9,392.00,.28],[10,440.00,.4],[11,523.25,.45],
+      [12,392.00,.35],[13,440.00,.28],[14,493.88,.4],[15,392.00,.55]
+    ];
+    const ahead=AC.currentTime+1.25;
+    while(bgmNext<ahead){
+      const t0=bgmNext;
+      for(let b=0;b<4;b++){
+        const ct=t0+b*bar,chs=chords[b];
+        chs.forEach((f,i)=>{
+          try{
+            const o=AC.createOscillator(),g=AC.createGain();
+            o.type='triangle';o.frequency.value=f;
+            const at=ct+i*.03,dur=bar*.92;
+            g.gain.setValueAtTime(1e-4,at);
+            g.gain.linearRampToValueAtTime(.045,at+.08);
+            g.gain.exponentialRampToValueAtTime(1e-4,at+dur);
+            o.connect(g);g.connect(bgmGain);o.start(at);o.stop(at+dur+.02);
+          }catch(e){}
+        });
+      }
+      melody.forEach(([bi,f,dur])=>{
+        try{
+          const o=AC.createOscillator(),g=AC.createGain();
+          o.type='sine';o.frequency.value=f;
+          const at=t0+bi*beat;
+          g.gain.setValueAtTime(1e-4,at);
+          g.gain.linearRampToValueAtTime(.07,at+.02);
+          g.gain.exponentialRampToValueAtTime(1e-4,at+dur);
+          o.connect(g);g.connect(bgmGain);o.start(at);o.stop(at+dur+.02);
+        }catch(e){}
+      });
+      bgmNext+=loop;
+    }
+    clearTimeout(bgmTimer);
+    bgmTimer=setTimeout(scheduleBgm,400);
+  }catch(e){}
+}
+function stopBgmHard(){
+  try{
+    clearTimeout(bgmTimer);bgmTimer=null;
+    bgmPad.forEach(n=>{try{n.o.stop();}catch(e){}});
+    bgmPad=[];bgmStarted=false;bgmNext=0;
   }catch(e){}
 }
 function tone(f,dur,type='sine',vol=.3,slide=0,delay=0){
@@ -145,7 +245,16 @@ const SFX={
   lose(){audio();[392,330,262,196].forEach((f,i)=>tone(f,.3,'sawtooth',.1,0,i*.12));},
   click(){audio();tone(880,.05,'square',.08);}
 };
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)audio();});
+document.addEventListener('visibilitychange',()=>{
+  try{
+    if(document.hidden){
+      if(AC&&AC.state==='running')AC.suspend();
+    }else{
+      audio();
+      if(bgmStarted)scheduleBgm();
+    }
+  }catch(e){}
+});
 
 /* ---------------- Canvas setup ---------------- */
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
@@ -283,7 +392,7 @@ function trayPos(i){const cap=state.trayCap,gap=(W-40)/cap;return{x:20+gap*i+gap
 cv.addEventListener('pointerdown',e=>{
   audio();const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
   // mute button
-  if(x>W-52&&y<L.hud+40){muted=!muted;localStorage.setItem('kp_mute',muted?'1':'0');SFX.click();return;}
+  if(x>W-52&&y<L.hud+40){setMuted(!muted);if(!muted)SFX.click();return;}
   // booster buttons
   for(const bt of boosters()){if(Math.hypot(x-bt.x,y-bt.y)<bt.r+6){bt.fn();return;}}
   if(state.dead||state.cleared)return;
