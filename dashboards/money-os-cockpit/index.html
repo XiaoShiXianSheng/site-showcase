@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI-Money-OS 经营驾驶舱</title>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#141b24; --card2:#1a232e; --line:#26303d;
+    --text:#e6edf3; --sub:#8b949e; --faint:#6e7681;
+    --accent:#f97316; --accent-soft:rgba(249,115,22,.14);
+    --blue:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --grey:#6e7681;
+    --r:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.6;padding-bottom:48px;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+  /* ---- header ---- */
+  header{padding:28px 0 18px;border-bottom:1px solid var(--line)}
+  .h-row{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  h1{font-size:24px;font-weight:700;letter-spacing:.5px}
+  h1 .dot{color:var(--accent)}
+  .meta{font-size:12px;color:var(--sub)}
+  .meta b{color:var(--text);font-weight:600}
+  .srcline{margin-top:10px;font-size:12px;color:var(--faint);word-break:break-all}
+  .srcline a{color:var(--blue);text-decoration:none}
+  /* ---- stat strip ---- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 6px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+  .stat .num{font-size:26px;font-weight:700;line-height:1.2}
+  .stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
+  .stat.warn .num{color:var(--red)}
+  .stat.ok .num{color:var(--green)}
+  /* ---- sections ---- */
+  section{margin-top:26px}
+  .sec-title{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;margin-bottom:12px}
+  .sec-title::before{content:"";width:4px;height:16px;background:var(--accent);border-radius:2px}
+  .sec-note{font-size:12px;color:var(--faint);font-weight:400;margin-left:auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+  /* ---- blocked center (top priority) ---- */
+  .block{border-color:rgba(248,81,73,.45);background:linear-gradient(180deg,rgba(248,81,73,.07),var(--card))}
+  .block-item{padding:10px 0;border-bottom:1px dashed var(--line)}
+  .block-item:last-child{border-bottom:none}
+  .block-item .t{font-weight:600;font-size:14px}
+  .block-item .r{font-size:13px;color:var(--sub);margin-top:3px}
+  .empty-ok{color:var(--green);font-size:14px;font-weight:600}
+  /* ---- agents ---- */
+  .agents{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .agent{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+  .agent .top{display:flex;align-items:center;gap:8px}
+  .agent .name{font-weight:700;font-size:15px}
+  .pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:.3px}
+  .pill.on{background:rgba(63,185,80,.15);color:var(--green)}
+  .pill.off{background:rgba(110,118,129,.15);color:var(--grey)}
+  .pill.spec{background:rgba(210,153,34,.13);color:var(--yellow)}
+  .agent .kv{font-size:12px;color:var(--sub);margin-top:8px;word-break:break-all}
+  .agent .kv b{color:var(--text);font-weight:600}
+  .agent .blk{margin-top:8px;font-size:12px;color:var(--red)}
+  /* ---- task table ---- */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--sub);font-weight:600;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .tid{font-weight:600;white-space:nowrap}
+  .tt{color:var(--sub);font-size:12px;margin-top:2px;max-width:340px}
+  .st{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;display:inline-block}
+  .st-READY{background:rgba(88,166,255,.14);color:var(--blue)}
+  .st-DRAFT{background:rgba(210,153,34,.13);color:var(--yellow)}
+  .st-BLOCKED{background:rgba(248,81,73,.14);color:var(--red)}
+  .st-REVIEW{background:rgba(63,185,80,.12);color:var(--green)}
+  .st-DONE{background:rgba(63,185,80,.14);color:var(--green)}
+  .st-RUNNING{background:var(--accent-soft);color:var(--accent)}
+  .st-default{background:rgba(110,118,129,.15);color:var(--grey)}
+  /* ---- broadcast ---- */
+  .bcast-file{font-weight:700;color:var(--accent);font-size:15px}
+  .bcast-lv{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(248,81,73,.15);color:var(--red);margin-left:8px}
+  /* ---- receipts ---- */
+  .rc{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .rc:last-child{border-bottom:none}
+  .rc .f{color:var(--sub);word-break:break-all}
+  .rc .a{color:var(--faint);font-size:12px;white-space:nowrap}
+  /* ---- footer ---- */
+  footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--faint)}
+  .nc{margin-top:6px}
+  .nc li{margin-left:18px;margin-top:2px}
+  /* ---- mobile first: 390px ---- */
+  @media (max-width:720px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .agents{grid-template-columns:1fr}
+    .tt{max-width:none}
+    th:nth-child(4),td:nth-child(4),th:nth-child(6),td:nth-child(6){display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="h-row">
+      <h1>AI-Money-OS 经营驾驶舱<span class="dot">.</span></h1>
+      <div class="meta">数据生成 <b id="genAt">-</b> · 来源 commit <b id="srcSha">-</b></div>
+    </div>
+    <div class="srcline">权威源：<a id="srcUrl" href="#" target="_blank" rel="noopener">GitHub XiaoShiXianSheng/AI-Money-OS</a> · 规范：<span id="specName">-</span> · 看板是派生视图，不改权威状态</div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <section>
+    <div class="sec-title">阻塞中心 <span class="sec-note">优先级最高 · 系统先自动恢复，无法解决才升级</span></div>
+    <div class="card block" id="blocked"></div>
+  </section>
+
+  <section>
+    <div class="sec-title">Agent 运行状态 <span class="sec-note">回执制：OFFLINE = 无真实轮询证据，不是没干活</span></div>
+    <div class="agents" id="agents"></div>
+  </section>
+
+  <section>
+    <div class="sec-title">任务队列 <span class="sec-note">以 TASK-*.json 为唯一状态源</span></div>
+    <div class="card" style="padding:6px 10px"><table id="taskTable"></table></div>
+  </section>
+
+  <section>
+    <div class="sec-title">变更播报 <span class="sec-note">各窗口同步只看 LATEST.txt 指针</span></div>
+    <div class="card" id="broadcast"></div>
+  </section>
+
+  <section>
+    <div class="sec-title">最近回执 <span class="sec-note">试点回执 + 任务回执</span></div>
+    <div class="card" id="receipts"></div>
+  </section>
+
+  <footer>
+    <div>防造假声明：本看板所有数字来自仓库文件解析，「未采集」处显示未接入，不用估算冒充实测；AGENT 自报不计入完成。</div>
+    <ul class="nc" id="notConnected"></ul>
+    <div style="margin-top:8px">内部看板，请勿外传。</div>
+  </footer>
+</div>
+
+<script>
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function short(s){return s?s.slice(0,8):"-"}
+function stClass(s){return "st st-"+(s||"default")}
+
+function render(d){
+  document.getElementById("genAt").textContent=d.generated_at||"-";
+  document.getElementById("srcSha").textContent=short(d.source_sha);
+  document.getElementById("srcUrl").href=d.source_url||"#";
+  document.getElementById("specName").textContent=d.dashboard_spec||"-";
+
+  var s=d.stats||{};
+  var sc=s.status_count||{};
+  document.getElementById("stats").innerHTML=
+    stat(s.tasks_total||0,"任务总数")+
+    stat(sc.READY||0,"READY 待执行")+
+    stat(s.agents_online||0,"Agent 在线/"+ (s.agents_total||0),"ok")+
+    stat((s.blocked_tasks||0)+(s.blocked_agents||0),"阻塞项","warn");
+
+  var bc=d.blocked_center||{};
+  var bt=bc.tasks||[],ba=bc.agents||[];
+  var bh="";
+  if(!bt.length&&!ba.length){bh='<div class="empty-ok">当前无阻塞项</div>'}
+  bt.forEach(function(t){
+    bh+='<div class="block-item"><div class="t">'+esc(t.task_id)+' · '+esc(t.title)+'</div>'+
+        '<div class="r">'+esc(t.blocked_reason||t.status)+'</div></div>';
+  });
+  ba.forEach(function(a){
+    bh+='<div class="block-item"><div class="t">'+esc(a.display_name||a.agent_id)+'（Agent）</div>'+
+        '<div class="r">'+esc(a.blocked_reason)+'</div></div>';
+  });
+  document.getElementById("blocked").innerHTML=bh;
+
+  document.getElementById("agents").innerHTML=(d.agents||[]).map(function(a){
+    var rt=(a.runtime_status||"").toUpperCase();
+    var pill= rt==="ONLINE"||rt==="POLLING" ? '<span class="pill on">'+esc(a.runtime_status)+'</span>'
+           : (a.capability_status||"").toUpperCase()==="SPECIFIED" ? '<span class="pill spec">'+esc(a.capability_status)+'</span>'
+           : '<span class="pill off">'+esc(a.runtime_status)+'</span>';
+    return '<div class="agent"><div class="top"><span class="name">'+esc(a.display_name)+'</span>'+pill+'</div>'+
+      '<div class="kv">轮询 <b>'+(a.last_poll_at||"未采集")+'</b> · 心跳 <b>'+(a.heartbeat_at||"未采集")+'</b></div>'+
+      '<div class="kv">last_seen <b>'+(a.last_seen_commit||"未采集")+'</b>'+(a.current_task_id?' · 任务 <b>'+esc(a.current_task_id)+'</b>':'')+'</div>'+
+      (a.blocked_reason?'<div class="blk">'+esc(a.blocked_reason)+'</div>':'')+
+      '</div>';
+  }).join("");
+
+  var rows=(d.tasks||[]).map(function(t){
+    return "<tr><td class='tid'>"+esc(t.task_id)+"<div class='tt'>"+esc(t.title)+"</div></td>"+
+      "<td><span class='"+stClass(t.status)+"'>"+esc(t.status)+"</span></td>"+
+      "<td>"+esc(t.priority)+"</td><td>"+esc(t.assigned_agent)+"</td>"+
+      "<td>"+esc(t.task_type)+"</td><td>"+esc((t.created_at||"").replace("T"," ").slice(0,16))+"</td></tr>";
+  }).join("");
+  document.getElementById("taskTable").innerHTML=
+    "<thead><tr><th>任务</th><th>状态</th><th>优先级</th><th>负责</th><th>类型</th><th>创建</th></tr></thead><tbody>"+
+    (rows||'<tr><td colspan="6" style="color:var(--faint)">无任务数据</td></tr>')+"</tbody>";
+
+  var b=d.broadcast||{};
+  document.getElementById("broadcast").innerHTML= b.exists
+    ? '<div><span class="bcast-file">'+esc(b.latest_file)+'</span>'+(b.level?'<span class="bcast-lv">'+esc(b.level)+'</span>':'')+'</div>'+
+      '<div style="font-size:13px;color:var(--sub);margin-top:6px">'+esc(b.summary||"")+'</div>'
+    : '<div style="color:var(--faint)">变更播报目录未接入</div>';
+
+  function rcList(arr){
+    if(!arr||!arr.length)return '<div style="color:var(--faint);font-size:13px">无</div>';
+    return arr.map(function(r){
+      return '<div class="rc"><span class="f">'+esc(r.title)+'</span><span class="a">'+esc(r.at||"")+'</span></div>';
+    }).join("");
+  }
+  document.getElementById("receipts").innerHTML=
+    '<div style="font-size:12px;color:var(--sub);margin-bottom:4px">试点回执</div>'+rcList(d.pilot_receipts)+
+    '<div style="font-size:12px;color:var(--sub);margin:12px 0 4px">任务回执</div>'+rcList(d.receipts);
+
+  document.getElementById("notConnected").innerHTML=(d.not_connected||[]).map(function(x){return "<li>"+esc(x)+"</li>"}).join("");
+}
+
+function showError(e){
+  document.getElementById("blocked").innerHTML='<div style="color:var(--red)">数据加载失败：'+esc(e.message||e)+'。请改用自包含版「驾驶舱_*.html」（数据已内嵌，双击即开），或先运行 build_data.py 生成 data.json。</div>';
+}
+
+/* 优先读 data.json（在线托管版为最新），失败回退内嵌数据（自包含版/双击打开场景） */
+fetch("data.json").then(function(r){return r.json()}).then(render).catch(function(e){
+  if (window.__EMBEDDED_DATA__) { render(window.__EMBEDDED_DATA__); } else { showError(e); }
+});
+
+function stat(num,label,cls){return '<div class="stat '+(cls||"")+'"><div class="num">'+num+'</div><div class="lbl">'+label+'</div></div>'}
+</script>
+<script>window.__EMBEDDED_DATA__ = {"generated_at": "2026-10-17 19:20:03", "source_sha": "", "source_url": "https://github.com/XiaoShiXianSheng/AI-Money-OS", "dashboard_spec": "00_总控中心/AI-Money-OS经营驾驶舱与日报周报月报规范_V1.0.md", "stats": {"tasks_total": 2, "status_count": {"READY": 1, "DRAFT": 1}, "agents_total": 4, "agents_online": 0, "blocked_tasks": 1, "blocked_agents": 4}, "blocked_center": {"tasks": [{"task_id": "AMO-20261014-SCHEDULER-001", "status": "DRAFT", "priority": "P1", "assigned_agent": "WORKBUDDY", "title": "", "blocked_reason": ""}], "agents": [{"agent_id": "WORKBUDDY", "display_name": "WorkBuddy", "blocked_reason": ""}, {"agent_id": "DOUBAO", "display_name": "豆包", "blocked_reason": ""}, {"agent_id": "GROK", "display_name": "Grok", "blocked_reason": ""}, {"agent_id": "CURSOR", "display_name": "Cursor", "blocked_reason": ""}]}, "agents": [{"agent_id": "WORKBUDDY", "display_name": "WorkBuddy", "capability_status": "SPECIFIED", "runtime_status": "OFFLINE", "last_seen_commit": "", "last_poll_at": "", "heartbeat_at": "", "current_task_id": "", "blocked_reason": "", "state_file": ""}, {"agent_id": "DOUBAO", "display_name": "豆包", "capability_status": "SPECIFIED", "runtime_status": "OFFLINE", "last_seen_commit": "", "last_poll_at": "", "heartbeat_at": "", "current_task_id": "", "blocked_reason": "", "state_file": ""}, {"agent_id": "GROK", "display_name": "Grok", "capability_status": "SPECIFIED", "runtime_status": "OFFLINE", "last_seen_commit": "", "last_poll_at": "", "heartbeat_at": "", "current_task_id": "", "blocked_reason": "", "state_file": ""}, {"agent_id": "CURSOR", "display_name": "Cursor", "capability_status": "SPECIFIED", "runtime_status": "OFFLINE", "last_seen_commit": "", "last_poll_at": "", "heartbeat_at": "", "current_task_id": "", "blocked_reason": "", "state_file": ""}], "tasks": [{"task_id": "AMO-20261017-ENDPOINT-WAKE-TEST-001", "title": "", "status": "READY", "priority": "P1", "assigned_agent": "WORKBUDDY", "task_type": "文档资产化", "risk_level": "LOW", "created_at": "", "blocked_reason": "", "claimed_by": "", "next_agent": "", "attempt": 0}, {"task_id": "AMO-20261014-SCHEDULER-001", "title": "", "status": "DRAFT", "priority": "P1", "assigned_agent": "WORKBUDDY", "task_type": "文档资产化", "risk_level": "LOW", "created_at": "", "blocked_reason": "", "claimed_by": "", "next_agent": "", "attempt": 0}], "broadcast": {"latest_file": "2026-10-17_初始波次.md", "level": "P0", "summary": "", "exists": true}, "receipts": [{"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}], "pilot_receipts": [{"file": "", "title": "", "at": ""}, {"file": "", "title": "", "at": ""}], "not_connected": ["公开版为脱敏数据：内部经营细节（阻塞原因/回执内容/commit）不展示", "完整数据看本机自包含版或 WorkBuddy 部署版"]};</script>
+</body>
+</html>
