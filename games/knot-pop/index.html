@@ -104,16 +104,28 @@ window.KnotPopAds={
 };
 function track(ev,data){ (window.__events=window.__events||[]).push([ev,data||null,Date.now()]); }
 
-/* ---------------- Audio (WebAudio synth + looping BGM) ---------------- */
-let AC=null,master=null,bgmGain=null,bgmPad=[],bgmTimer=null,bgmNext=0,bgmStarted=false;
+/* ---------------- Audio (WebAudio synth + richer decompress BGM) ---------------- */
+/* Quality bar: warm bass + soft pluck + chord pads + light perc + sidechain duck,
+   8-bar ~88 BPM major loop, stereo delay width. Pure WebAudio, no external files.
+   Inspired by casual 三消/解压 UX (memorable texture, not thin sine pad). */
+let AC=null,master=null,bgmGain=null,bgmBus=null,bgmDuck=null,bgmPad=[],bgmTimer=null,bgmNext=0,bgmStarted=false;
 let muted=localStorage.getItem('kp_mute')==='1';
-const BGM_VOL=.15; /* quieter than SFX master ~0.5 */
+const BGM_VOL=.14; /* quieter than SFX master ~0.5 */
 function audio(){
   try{
     if(!AC||AC.state==='closed'){
       AC=new (window.AudioContext||window.webkitAudioContext)();
       master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);
       bgmGain=AC.createGain();bgmGain.gain.value=muted?0:BGM_VOL;bgmGain.connect(AC.destination);
+      /* ducked bus -> stereo widen delay -> bgmGain */
+      bgmDuck=AC.createGain();bgmDuck.gain.value=1;
+      const widen=AC.createDelay(.05);widen.delayTime.value=.028;
+      const wGain=AC.createGain();wGain.gain.value=.32;
+      const wPan=AC.createStereoPanner?AC.createStereoPanner():null;
+      if(wPan){wPan.pan.value=.55;bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(wPan);wPan.connect(bgmGain);}
+      else{bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(bgmGain);}
+      bgmDuck.connect(bgmGain);
+      bgmBus=bgmDuck;
       bgmPad=[];bgmStarted=false;bgmNext=0;
     }
     if(AC.state==='suspended')AC.resume();
@@ -133,79 +145,174 @@ function setMuted(v){
   try{localStorage.setItem('kp_mute',muted?'1':'0');}catch(e){}
   applyMuteGain();
 }
-/* Soft looping pad + 4-bar lo-fi melody (no external files) */
+/* Soft filtered noise hush (optional texture under pads) */
+function startHush(){
+  try{
+    if(!AC||!bgmBus)return;
+    const len=AC.sampleRate*2,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*.35;
+    const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
+    const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=480;bp.Q.value=.55;
+    const g=AC.createGain();g.gain.value=.035;
+    src.connect(bp);bp.connect(g);g.connect(bgmBus);src.start();
+    bgmPad.push({o:src,g});
+  }catch(e){}
+}
+/* Warm continuous pad (triangle+sine blend through lowpass) — not a thin solo sine */
 function startBgm(){
   try{
-    if(!AC||!bgmGain||bgmStarted)return;
+    if(!AC||!bgmGain||!bgmBus||bgmStarted)return;
     bgmStarted=true;
-    /* continuous gentle pad (3 detuned sines through lowpass) */
-    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=720;lp.Q.value=.7;
-    lp.connect(bgmGain);
-    const roots=[196.00,246.94,293.66]; /* G3 B3 D4 soft triad */
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;lp.Q.value=.6;
+    lp.connect(bgmBus);
+    /* Cmaj soft stack: C3 E3 G3 C4 — triangle+sine pairs for warmth */
+    const roots=[[130.81,'triangle'],[164.81,'sine'],[196.00,'triangle'],[261.63,'sine']];
     bgmPad=[];
-    roots.forEach((f,i)=>{
+    roots.forEach((pair,i)=>{
+      const f=pair[0],typ=pair[1];
       const o=AC.createOscillator(),g=AC.createGain();
-      o.type='sine';o.frequency.value=f*(1+(i-1)*.003);
-      g.gain.value=.18;
+      o.type=typ;o.frequency.value=f*(1+(i-1.5)*.0025);
+      g.gain.value=.11;
       o.connect(g);g.connect(lp);o.start();
       const lfo=AC.createOscillator(),lg=AC.createGain();
-      lfo.frequency.value=.07+i*.01;lg.gain.value=.045;
+      lfo.frequency.value=.06+i*.012;lg.gain.value=.028;
       lfo.connect(lg);lg.connect(g.gain);lfo.start();
       bgmPad.push({o,g},{o:lfo,g:lg});
     });
-    bgmNext=AC.currentTime+.05;
+    startHush();
+    bgmNext=AC.currentTime+.08;
     scheduleBgm();
   }catch(e){bgmStarted=false;}
 }
+/* Schedule one 8-bar loop chunk: bass + chord stabs + soft pluck melody + light perc + sidechain */
 function scheduleBgm(){
   try{
-    if(!AC||!bgmStarted)return;
-    const BPM=72,beat=60/BPM,bar=beat*4,loop=bar*4;
-    /* 4 bars: Cmaj7 Am7 Fmaj7 G7 — soft triangle plucks */
-    const chords=[
-      [261.63,329.63,392.00,493.88],
-      [220.00,261.63,329.63,415.30],
-      [174.61,220.00,261.63,349.23],
-      [196.00,246.94,293.66,392.00]
+    if(!AC||!bgmStarted||!bgmBus)return;
+    const BPM=88,beat=60/BPM,bar=beat*4,loop=bar*8;
+    /* 8 bars I–vi–IV–V–I–vi–ii–V in C: C Am F G | C Am Dm G */
+    const bassRoots=[130.81,110.00,174.61,196.00,130.81,110.00,146.83,196.00];
+    const chordVoices=[
+      [261.63,329.63,392.00],   /* C */
+      [220.00,261.63,329.63],   /* Am */
+      [174.61,220.00,261.63],   /* F */
+      [196.00,246.94,293.66],   /* G */
+      [261.63,329.63,392.00],   /* C */
+      [220.00,261.63,329.63],   /* Am */
+      [146.83,220.00,293.66],   /* Dm */
+      [196.00,246.94,293.66]    /* G */
     ];
+    /* Soft plucked melody (beats within 8 bars) — cute, memorable, not busy */
     const melody=[
-      [0,523.25,.35],[1,587.33,.28],[2,659.25,.4],[3,587.33,.28],
-      [4,523.25,.35],[5,440.00,.4],[6,493.88,.35],[7,523.25,.5],
-      [8,349.23,.35],[9,392.00,.28],[10,440.00,.4],[11,523.25,.45],
-      [12,392.00,.35],[13,440.00,.28],[14,493.88,.4],[15,392.00,.55]
+      [0,523.25,.42],[1,587.33,.28],[2,659.25,.48],[3.5,587.33,.22],
+      [4,523.25,.35],[5,440.00,.42],[6,493.88,.32],[7,523.25,.55],
+      [8,349.23,.35],[9,392.00,.28],[10,440.00,.4],[11,523.25,.48],
+      [12,392.00,.32],[13,440.00,.28],[14,493.88,.38],[15,587.33,.55],
+      [16,523.25,.4],[17.5,659.25,.28],[18,587.33,.42],[19,523.25,.5],
+      [20,440.00,.35],[21,493.88,.28],[22,523.25,.4],[23,587.33,.55],
+      [24,440.00,.35],[25,523.25,.28],[26,587.33,.4],[27,659.25,.45],
+      [28,523.25,.32],[29,493.88,.28],[30,440.00,.38],[31,392.00,.65]
     ];
-    const ahead=AC.currentTime+1.25;
+    const dest=bgmBus;
+    const ahead=AC.currentTime+1.4;
     while(bgmNext<ahead){
       const t0=bgmNext;
-      for(let b=0;b<4;b++){
-        const ct=t0+b*bar,chs=chords[b];
-        chs.forEach((f,i)=>{
+      /* sidechain duck pulses on each beat (light groove) */
+      try{
+        if(bgmDuck){
+          for(let i=0;i<32;i++){
+            const at=t0+i*beat;
+            const g=bgmDuck.gain;
+            g.setValueAtTime(1,Math.max(AC.currentTime,at-.002));
+            g.linearRampToValueAtTime(.62,at+.018);
+            g.exponentialRampToValueAtTime(1,at+beat*.72);
+          }
+        }
+      }catch(e){}
+      /* warm bass — triangle + soft sine sub, root per bar with offbeat bump */
+      for(let b=0;b<8;b++){
+        const root=bassRoots[b];
+        [0,2].forEach((off,oi)=>{
           try{
-            const o=AC.createOscillator(),g=AC.createGain();
-            o.type='triangle';o.frequency.value=f;
-            const at=ct+i*.03,dur=bar*.92;
+            const at=t0+b*bar+off*beat;
+            const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();
+            o1.type='triangle';o1.frequency.value=root;
+            o2.type='sine';o2.frequency.value=root*.5;
+            const peak=oi?0.11:0.16;
             g.gain.setValueAtTime(1e-4,at);
-            g.gain.linearRampToValueAtTime(.045,at+.08);
-            g.gain.exponentialRampToValueAtTime(1e-4,at+dur);
-            o.connect(g);g.connect(bgmGain);o.start(at);o.stop(at+dur+.02);
+            g.gain.linearRampToValueAtTime(peak,at+.012);
+            g.gain.exponentialRampToValueAtTime(1e-4,at+beat*1.55);
+            const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=420;
+            o1.connect(g);o2.connect(g);g.connect(lp);lp.connect(dest);
+            o1.start(at);o2.start(at);o1.stop(at+beat*1.7);o2.stop(at+beat*1.7);
           }catch(e){}
         });
       }
+      /* gentle chord stabs (triangle+sine mix) each bar downbeat + soft afterbeat */
+      for(let b=0;b<8;b++){
+        const ch=chordVoices[b];
+        [0,1.5].forEach((off,oi)=>{
+          ch.forEach((f,i)=>{
+            try{
+              const at=t0+b*bar+off*beat+i*.012;
+              const o=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();
+              o.type='triangle';o.frequency.value=f;
+              o2.type='sine';o2.frequency.value=f*2.005;
+              const peak=oi?0.028:0.048;
+              const dur=oi?beat*1.1:bar*.78;
+              g.gain.setValueAtTime(1e-4,at);
+              g.gain.linearRampToValueAtTime(peak,at+.04);
+              g.gain.exponentialRampToValueAtTime(1e-4,at+dur);
+              const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1400;
+              o.connect(g);o2.connect(g);g.connect(lp);lp.connect(dest);
+              o.start(at);o2.start(at);o.stop(at+dur+.03);o2.stop(at+dur+.03);
+            }catch(e){}
+          });
+        });
+      }
+      /* soft plucked melody — short attack triangle + tiny sine sparkle, slight L/R via delay already */
       melody.forEach(([bi,f,dur])=>{
         try{
-          const o=AC.createOscillator(),g=AC.createGain();
-          o.type='sine';o.frequency.value=f;
           const at=t0+bi*beat;
+          const o=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();
+          o.type='triangle';o.frequency.value=f;
+          o2.type='sine';o2.frequency.value=f*2.01;
           g.gain.setValueAtTime(1e-4,at);
-          g.gain.linearRampToValueAtTime(.07,at+.02);
+          g.gain.linearRampToValueAtTime(.085,at+.008);
           g.gain.exponentialRampToValueAtTime(1e-4,at+dur);
-          o.connect(g);g.connect(bgmGain);o.start(at);o.stop(at+dur+.02);
+          const hp=AC.createBiquadFilter();hp.type='highpass';hp.frequency.value=180;
+          o.connect(g);o2.connect(g);g.connect(hp);hp.connect(dest);
+          o.start(at);o2.start(at);o.stop(at+dur+.03);o2.stop(at+dur+.03);
         }catch(e){}
       });
+      /* light percussion: soft kick (sine thump) + filtered noise hush hats */
+      for(let i=0;i<32;i++){
+        const at=t0+i*beat;
+        /* kick on 1 & 3 of each bar (every 2 beats) */
+        if(i%2===0){
+          try{
+            const o=AC.createOscillator(),g=AC.createGain();
+            o.type='sine';o.frequency.setValueAtTime(92,at);o.frequency.exponentialRampToValueAtTime(48,at+.09);
+            g.gain.setValueAtTime(1e-4,at);g.gain.linearRampToValueAtTime(.11,at+.006);g.gain.exponentialRampToValueAtTime(1e-4,at+.18);
+            o.connect(g);g.connect(dest);o.start(at);o.stop(at+.22);
+          }catch(e){}
+        }
+        /* soft hat / brush on offbeats + light 16th sparkle every other */
+        if(i%2===1||i%4===2){
+          try{
+            const n=Math.floor(AC.sampleRate*.05),b=AC.createBuffer(1,n,AC.sampleRate),d=b.getChannelData(0);
+            for(let k=0;k<n;k++)d[k]=(Math.random()*2-1)*(1-k/n);
+            const s=AC.createBufferSource();s.buffer=b;
+            const f=AC.createBiquadFilter();f.type='highpass';f.frequency.value=i%2?4200:2800;
+            const g=AC.createGain();const peak=i%2===1?.045:.028;
+            g.gain.setValueAtTime(peak,at);g.gain.exponentialRampToValueAtTime(1e-4,at+.05);
+            s.connect(f);f.connect(g);g.connect(dest);s.start(at);s.stop(at+.06);
+          }catch(e){}
+        }
+      }
       bgmNext+=loop;
     }
     clearTimeout(bgmTimer);
-    bgmTimer=setTimeout(scheduleBgm,400);
+    bgmTimer=setTimeout(scheduleBgm,380);
   }catch(e){}
 }
 function stopBgmHard(){
