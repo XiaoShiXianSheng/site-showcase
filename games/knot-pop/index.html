@@ -111,8 +111,23 @@ function track(ev,data){ (window.__events=window.__events||[]).push([ev,data||nu
 let AC=null,master=null,bgmGain=null,bgmBus=null,bgmDuck=null,bgmPad=[],bgmTimer=null,bgmNext=0,bgmStarted=false;
 let muted=localStorage.getItem('kp_mute')==='1';
 let bgmWanted=false; /* true after first successful unmuted start; false when muted — mobile unlock gate */
+let bgmNeedsHardUnlock=false; /* set on zombie/suspended foreground; cleared after gesture hard unlock */
 const BGM_VOL=.14; /* quieter than SFX master ~0.5 */
 function padsAlive(){return !!(bgmStarted&&bgmPad&&bgmPad.length);}
+function rebuildBgmBus(){
+  try{
+    if(!AC||!bgmGain)return;
+    try{if(bgmDuck)bgmDuck.disconnect();}catch(e){}
+    bgmDuck=AC.createGain();bgmDuck.gain.value=1;
+    const widen=AC.createDelay(.05);widen.delayTime.value=.028;
+    const wGain=AC.createGain();wGain.gain.value=.32;
+    const wPan=AC.createStereoPanner?AC.createStereoPanner():null;
+    if(wPan){wPan.pan.value=.55;bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(wPan);wPan.connect(bgmGain);}
+    else{bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(bgmGain);}
+    bgmDuck.connect(bgmGain);
+    bgmBus=bgmDuck;
+  }catch(e){}
+}
 function restartBgmIfNeeded(){
   try{
     if(muted||!bgmWanted)return;
@@ -121,48 +136,66 @@ function restartBgmIfNeeded(){
     else if(!bgmStarted) startBgm();
   }catch(e){}
 }
+/* Soft create/resume for SFX: never hard-restart BGM mid-combo when pads already alive. */
 function audio(){
   try{
     if(!AC||AC.state==='closed'){
       AC=new (window.AudioContext||window.webkitAudioContext)();
       master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);
       bgmGain=AC.createGain();bgmGain.gain.value=muted?0:BGM_VOL;bgmGain.connect(AC.destination);
-      /* ducked bus -> stereo widen delay -> bgmGain */
-      bgmDuck=AC.createGain();bgmDuck.gain.value=1;
-      const widen=AC.createDelay(.05);widen.delayTime.value=.028;
-      const wGain=AC.createGain();wGain.gain.value=.32;
-      const wPan=AC.createStereoPanner?AC.createStereoPanner():null;
-      if(wPan){wPan.pan.value=.55;bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(wPan);wPan.connect(bgmGain);}
-      else{bgmDuck.connect(widen);widen.connect(wGain);wGain.connect(bgmGain);}
-      bgmDuck.connect(bgmGain);
-      bgmBus=bgmDuck;
+      rebuildBgmBus();
       bgmPad=[];bgmStarted=false;bgmNext=0;
     }
     if(AC.state==='suspended'){
       const p=AC.resume();
-      /* If resume is async, ensure BGM restarts once context is running (bgmStarted may have been cleared on hide). */
       if(p&&typeof p.then==='function'){
-        p.then(()=>{ try{ applyMuteGain(); if(bgmWanted&&!muted) restartBgmIfNeeded(); else if(!muted) startBgm(); }catch(e){} }).catch(()=>{});
+        p.then(()=>{ try{
+          applyMuteGain();
+          /* Only restart if pads were cleared (e.g. background) — not on every SFX */
+          if(bgmWanted&&!muted&&!padsAlive()){stopBgmHard();startBgm();}
+        }catch(e){} }).catch(()=>{});
       }
+      return;
     }
-    if(bgmWanted&&!muted) restartBgmIfNeeded();
-    else if(!muted) startBgm();
+    if(bgmWanted&&!muted){
+      applyMuteGain();
+      if(!padsAlive()){stopBgmHard();startBgm();}
+    }
   }catch(e){}
 }
+function sleepMs(ms){return new Promise(r=>setTimeout(r,ms));}
 /* Mobile Safari / Android WebView / TapTap H5 often refuse AudioContext.resume()
-   without a fresh user gesture after background. Call this from canvas taps. */
+   without a fresh user gesture after background. Call this from canvas pointerdown only. */
 async function unlockBgmFromUserGesture(){
   try{
-    audio();
+    if(!AC||AC.state==='closed') audio();
     if(!bgmWanted||muted)return;
-    if(AC&&AC.state==='suspended'){
+    if(!AC)return;
+    const needHard=bgmNeedsHardUnlock||AC.state==='closed'||AC.state!=='running'||!padsAlive();
+    if(bgmNeedsHardUnlock||AC.state==='suspended'){
+      /* Under gesture: suspend→~150ms→resume, then hard restart once */
+      try{
+        if(AC.state==='running'||AC.state==='interrupted') await AC.suspend();
+      }catch(e){}
+      await sleepMs(150);
       try{await AC.resume();}catch(e){}
+      applyMuteGain();
+      stopBgmHard();
+      startBgm();
+      bgmNeedsHardUnlock=false;
+      return;
     }
+    if(needHard){
+      if(AC.state==='suspended'){ try{await AC.resume();}catch(e){} }
+      applyMuteGain();
+      stopBgmHard();
+      startBgm();
+      bgmNeedsHardUnlock=false;
+      return;
+    }
+    /* Already running + pads alive: soft path — no stopBgmHard+startBgm (avoids combo stutter) */
+    try{ if(AC.state!=='running') await AC.resume(); }catch(e){}
     applyMuteGain();
-    /* Always recreate pads after a gesture unlock: oscillators created while
-       AC was still suspended can look "alive" but stay silent on mobile. */
-    stopBgmHard();
-    startBgm();
   }catch(e){}
 }
 function applyMuteGain(){
@@ -205,8 +238,10 @@ function startHush(){
 /* Warm continuous pad (triangle+sine blend through lowpass) — not a thin solo sine */
 function startBgm(){
   try{
-    if(!AC||!bgmGain||!bgmBus||bgmStarted)return;
+    if(!AC||!bgmGain||bgmStarted)return;
     if(muted)return;
+    if(!bgmBus||!bgmDuck) rebuildBgmBus();
+    if(!bgmBus)return;
     bgmStarted=true;
     bgmWanted=true;
     const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;lp.Q.value=.6;
@@ -366,6 +401,16 @@ function stopBgmHard(){
     clearTimeout(bgmTimer);bgmTimer=null;
     bgmPad.forEach(n=>{try{n.o.stop();}catch(e){}});
     bgmPad=[];bgmStarted=false;bgmNext=0;
+    /* Silence / cancel duck automation; disconnect bus so pending one-shots go quiet */
+    if(bgmDuck&&AC){
+      try{
+        const t=AC.currentTime;
+        bgmDuck.gain.cancelScheduledValues(t);
+        bgmDuck.gain.setValueAtTime(0,t);
+      }catch(e){}
+      try{bgmDuck.disconnect();}catch(e){}
+    }
+    bgmBus=null; /* rebuilt on next startBgm via rebuildBgmBus */
   }catch(e){}
 }
 /* Pause cleanly on background: drop scheduler + continuous pads so resume can recreate.
@@ -380,39 +425,43 @@ function pauseBgmForBackground(){
     if(AC&&AC.state==='running')AC.suspend();
   }catch(e){}
 }
-/* Resume path: await AudioContext.resume(), then force-restart pad voices + scheduler.
+/* Resume path: zombie-aware suspend→wait→resume; never optimistic startBgm while still suspended.
    Called from visibilitychange / pageshow / focus when document becomes visible. */
 let bgmResumeSeq=0;
 async function resumeBgmFromForeground(){
   const seq=++bgmResumeSeq;
   try{
-    if(!AC||AC.state==='closed'){
-      /* never started — wait for a user gesture; still nudge if we wanted music */
-      if(bgmWanted&&!muted){
-        setTimeout(()=>{
-          if(seq!==bgmResumeSeq)return;
-          if(bgmWanted&&!muted&&(!AC||AC.state==='suspended'||!bgmStarted)) toast('点一下恢复音乐');
-        },400);
-      }
+    if(muted||!bgmWanted){
       return;
     }
-    if(AC.state==='suspended'){
-      try{await AC.resume();}catch(e){}
+    if(!AC||AC.state==='closed'){
+      bgmNeedsHardUnlock=true;
+      setTimeout(()=>{
+        if(seq!==bgmResumeSeq)return;
+        if(bgmWanted&&!muted) toast('点一下恢复音乐');
+      },400);
+      return;
     }
-    if(seq!==bgmResumeSeq)return; /* newer resume won the race (focus+visibility) */
+    /* Interrupted or running-but-zombie risk after hide cleared pads: bounce through suspend */
+    try{
+      if(AC.state==='interrupted'||AC.state==='running'){
+        await AC.suspend();
+        await sleepMs(150);
+      }
+    }catch(e){}
+    if(seq!==bgmResumeSeq)return;
+    try{await AC.resume();}catch(e){}
+    if(seq!==bgmResumeSeq)return;
+    if(!AC||AC.state!=='running'){
+      bgmNeedsHardUnlock=true;
+      toast('点一下恢复音乐');
+      /* do NOT optimistically startBgm while suspended */
+      return;
+    }
+    /* Running: pads were cleared on hide — recreate once */
     applyMuteGain();
-    if(muted)return; /* mute still silences; pads stay stopped until unmute + gesture */
-    if(bgmWanted){
-      /* Force-restart: recreate continuous pad/hush and kick scheduler even if prior state looked "started" */
-      stopBgmHard();
-      startBgm();
-    }
-    /* Mobile often leaves AC suspended without a fresh gesture — prompt one tap */
-    setTimeout(()=>{
-      if(seq!==bgmResumeSeq)return;
-      if(!bgmWanted||muted)return;
-      if(!AC||AC.state==='suspended'||!bgmStarted||!bgmPad.length) toast('点一下恢复音乐');
-    },400);
+    stopBgmHard();
+    startBgm();
   }catch(e){}
 }
 function onPageBecomeVisible(){
@@ -442,10 +491,25 @@ function noise(dur,vol=.2,hp=1200){
     s.connect(f);f.connect(g);g.connect(master);s.start(t0);s.stop(t0+dur+.02);
   }catch(e){}
 }
+function inComboWindow(){return !!(state&&state.comboT>0&&state.combo>=2);}
 const SFX={
-  pick(i){audio();tone(520+i*40,.09,'triangle',.25,1.6);noise(.05,.08,3000);},
-  land(){audio();tone(300,.07,'sine',.2,.7);},
-  spool(combo){audio();const base=[523,587,659,784,880,1046][Math.min(combo-1,5)];tone(base,.18,'triangle',.25);tone(base*1.25,.18,'triangle',.2,0,.06);tone(base*1.5,.28,'triangle',.22,0,.12);noise(.12,.06,4000);},
+  pick(i){
+    audio();
+    const combo=inComboWindow();
+    tone(520+i*40,.09,'triangle',combo?.16:.25,1.6);
+    noise(.05,combo?.05:.08,3000);
+  },
+  land(){
+    audio();
+    if(inComboWindow()){tone(300,.05,'sine',.05,.7);return;} /* duck ≤0.06 during combo */
+    tone(300,.07,'sine',.2,.7);
+  },
+  spool(combo){
+    audio();
+    const base=[523,587,659,784,880,1046][Math.min(combo-1,5)];
+    tone(base,.18,'triangle',.25);tone(base*1.25,.18,'triangle',.2,0,.06);tone(base*1.5,.28,'triangle',.22,0,.12);
+    noise(.12,.045,4000); /* slightly quieter noise; spool stays the hero cue */
+  },
   bad(){audio();tone(160,.22,'square',.15,.6);},
   win(){audio();[523,659,784,1046,1318].forEach((f,i)=>tone(f,.25,'triangle',.22,0,i*.08));},
   lose(){audio();[392,330,262,196].forEach((f,i)=>tone(f,.3,'sawtooth',.1,0,i*.12));},
@@ -459,6 +523,9 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('pageshow',()=>{
   try{ if(!document.hidden) onPageBecomeVisible(); }catch(e){}
+});
+window.addEventListener('pagehide',()=>{
+  try{ onPageBecomeHidden(); }catch(e){}
 });
 window.addEventListener('focus',()=>{
   try{ if(!document.hidden) onPageBecomeVisible(); }catch(e){}
@@ -611,7 +678,6 @@ cv.addEventListener('pointerdown',e=>{
   if(hit.lock>0){hit.shake=.4;SFX.bad();shake(3);toast('🔒 再完成 '+hit.lock+' 个线轴解锁');return;}
   take(hit);
 });
-cv.addEventListener('touchstart',()=>{ unlockBgmFromUserGesture(); },{passive:true});
 function take(b){
   state.started=true;hint.show=false;state.taps++;
   b.taken=true;
