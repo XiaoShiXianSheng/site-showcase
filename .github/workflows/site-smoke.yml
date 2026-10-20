@@ -1,0 +1,65 @@
+name: Static Showcase Browser Smoke Tests
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "factory/**"
+      - "dtc/**"
+      - "restaurant/**"
+      - "games/**"
+      - "cn-local/**"
+      - "assets/**"
+      - "tests/site-smoke.spec.js"
+      - "playwright.config.js"
+      - "package.json"
+      - ".github/workflows/site-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser tests
+        run: npm install
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Serve static site
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/site-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/site-server.log
+          exit 1
+      - name: Run desktop, mobile and demo-flow checks
+        run: npm run test:site
+      - name: Verify advertised live Pages URL and root bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          live_url="https://xiaoshixiansheng.github.io/site-showcase/"
+          curl -fsSL --retry 2 --max-time 30 "$live_url" -o /tmp/site-live.html
+          if ! cmp -s index.html /tmp/site-live.html; then
+            echo "The live Pages root does not byte-match the checked-out main index.html." >&2
+            exit 1
+          fi
+          echo "Live Pages URL is reachable and root HTML byte-matches main."
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-showcase-browser-evidence
+          path: artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 14
