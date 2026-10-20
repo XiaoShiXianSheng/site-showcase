@@ -110,7 +110,17 @@ function track(ev,data){ (window.__events=window.__events||[]).push([ev,data||nu
    Inspired by casual 三消/解压 UX (memorable texture, not thin sine pad). */
 let AC=null,master=null,bgmGain=null,bgmBus=null,bgmDuck=null,bgmPad=[],bgmTimer=null,bgmNext=0,bgmStarted=false;
 let muted=localStorage.getItem('kp_mute')==='1';
+let bgmWanted=false; /* true after first successful unmuted start; false when muted — mobile unlock gate */
 const BGM_VOL=.14; /* quieter than SFX master ~0.5 */
+function padsAlive(){return !!(bgmStarted&&bgmPad&&bgmPad.length);}
+function restartBgmIfNeeded(){
+  try{
+    if(muted||!bgmWanted)return;
+    applyMuteGain();
+    if(!padsAlive()){stopBgmHard();startBgm();}
+    else if(!bgmStarted) startBgm();
+  }catch(e){}
+}
 function audio(){
   try{
     if(!AC||AC.state==='closed'){
@@ -132,10 +142,27 @@ function audio(){
       const p=AC.resume();
       /* If resume is async, ensure BGM restarts once context is running (bgmStarted may have been cleared on hide). */
       if(p&&typeof p.then==='function'){
-        p.then(()=>{ try{ applyMuteGain(); if(!muted) startBgm(); }catch(e){} }).catch(()=>{});
+        p.then(()=>{ try{ applyMuteGain(); if(bgmWanted&&!muted) restartBgmIfNeeded(); else if(!muted) startBgm(); }catch(e){} }).catch(()=>{});
       }
     }
-    if(!muted) startBgm();
+    if(bgmWanted&&!muted) restartBgmIfNeeded();
+    else if(!muted) startBgm();
+  }catch(e){}
+}
+/* Mobile Safari / Android WebView / TapTap H5 often refuse AudioContext.resume()
+   without a fresh user gesture after background. Call this from canvas taps. */
+async function unlockBgmFromUserGesture(){
+  try{
+    audio();
+    if(!bgmWanted||muted)return;
+    if(AC&&AC.state==='suspended'){
+      try{await AC.resume();}catch(e){}
+    }
+    applyMuteGain();
+    /* Always recreate pads after a gesture unlock: oscillators created while
+       AC was still suspended can look "alive" but stay silent on mobile. */
+    stopBgmHard();
+    startBgm();
   }catch(e){}
 }
 function applyMuteGain(){
@@ -149,7 +176,18 @@ function applyMuteGain(){
 function setMuted(v){
   muted=!!v;
   try{localStorage.setItem('kp_mute',muted?'1':'0');}catch(e){}
+  if(muted) bgmWanted=false;
+  else bgmWanted=true;
   applyMuteGain();
+  if(!muted){
+    try{
+      if(AC&&AC.state==='suspended'){
+        const p=AC.resume();
+        if(p&&typeof p.then==='function') p.then(()=>{try{stopBgmHard();startBgm();}catch(e){}}).catch(()=>{});
+      }
+      stopBgmHard();startBgm();
+    }catch(e){}
+  }
 }
 /* Soft filtered noise hush (optional texture under pads) */
 function startHush(){
@@ -168,7 +206,9 @@ function startHush(){
 function startBgm(){
   try{
     if(!AC||!bgmGain||!bgmBus||bgmStarted)return;
+    if(muted)return;
     bgmStarted=true;
+    bgmWanted=true;
     const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;lp.Q.value=.6;
     lp.connect(bgmBus);
     /* Cmaj soft stack: C3 E3 G3 C4 — triangle+sine pairs for warmth */
@@ -346,16 +386,33 @@ let bgmResumeSeq=0;
 async function resumeBgmFromForeground(){
   const seq=++bgmResumeSeq;
   try{
-    if(!AC||AC.state==='closed')return; /* never started — wait for a user gesture via audio() */
+    if(!AC||AC.state==='closed'){
+      /* never started — wait for a user gesture; still nudge if we wanted music */
+      if(bgmWanted&&!muted){
+        setTimeout(()=>{
+          if(seq!==bgmResumeSeq)return;
+          if(bgmWanted&&!muted&&(!AC||AC.state==='suspended'||!bgmStarted)) toast('点一下恢复音乐');
+        },400);
+      }
+      return;
+    }
     if(AC.state==='suspended'){
       try{await AC.resume();}catch(e){}
     }
     if(seq!==bgmResumeSeq)return; /* newer resume won the race (focus+visibility) */
     applyMuteGain();
-    if(muted)return; /* mute still silences; pads stay stopped until unmute + audio() */
-    /* Force-restart: recreate continuous pad/hush and kick scheduler even if prior state looked "started" */
-    stopBgmHard();
-    startBgm();
+    if(muted)return; /* mute still silences; pads stay stopped until unmute + gesture */
+    if(bgmWanted){
+      /* Force-restart: recreate continuous pad/hush and kick scheduler even if prior state looked "started" */
+      stopBgmHard();
+      startBgm();
+    }
+    /* Mobile often leaves AC suspended without a fresh gesture — prompt one tap */
+    setTimeout(()=>{
+      if(seq!==bgmResumeSeq)return;
+      if(!bgmWanted||muted)return;
+      if(!AC||AC.state==='suspended'||!bgmStarted||!bgmPad.length) toast('点一下恢复音乐');
+    },400);
   }catch(e){}
 }
 function onPageBecomeVisible(){
@@ -541,7 +598,7 @@ function trayPos(i){const cap=state.trayCap,gap=(W-40)/cap;return{x:20+gap*i+gap
 
 /* ---------------- Input ---------------- */
 cv.addEventListener('pointerdown',e=>{
-  audio();const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  unlockBgmFromUserGesture();const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
   // mute button
   if(x>W-52&&y<L.hud+40){setMuted(!muted);if(!muted)SFX.click();return;}
   // booster buttons
@@ -554,6 +611,7 @@ cv.addEventListener('pointerdown',e=>{
   if(hit.lock>0){hit.shake=.4;SFX.bad();shake(3);toast('🔒 再完成 '+hit.lock+' 个线轴解锁');return;}
   take(hit);
 });
+cv.addEventListener('touchstart',()=>{ unlockBgmFromUserGesture(); },{passive:true});
 function take(b){
   state.started=true;hint.show=false;state.taps++;
   b.taken=true;
